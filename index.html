@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta
+    name="apple-mobile-web-app-capable"
+    content="yes"
+  >
+
+  <meta
+    name="apple-mobile-web-app-status-bar-style"
+    content="default"
+  >
+
+  <title>Nihongo</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+
+      background: #f7f6f2;
+      color: #171717;
+
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Helvetica Neue",
+        sans-serif;
+    }
+
+    body {
+      min-height: 100dvh;
+    }
+
+    #app {
+      min-height: 100dvh;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      padding:
+        calc(env(safe-area-inset-top) + 28px)
+        28px
+        calc(env(safe-area-inset-bottom) + 28px);
+
+      text-align: center;
+    }
+
+    .conteudo {
+      width: 100%;
+      max-width: 430px;
+    }
+
+    .romaji {
+      margin: 0;
+
+      font-size: clamp(31px, 9vw, 42px);
+      line-height: 1.18;
+
+      font-weight: 650;
+      letter-spacing: -.035em;
+    }
+
+    .traducao {
+      margin-top: 18px;
+
+      color: #77736c;
+
+      font-size: 18px;
+      line-height: 1.45;
+    }
+
+    .contador {
+      height: 20px;
+      margin-bottom: 30px;
+
+      color: #9b9891;
+
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .08em;
+    }
+
+    .acoes {
+      display: flex;
+      justify-content: center;
+
+      gap: 22px;
+      margin-top: 54px;
+    }
+
+    button {
+      width: 78px;
+      height: 78px;
+
+      padding: 0;
+
+      border: none;
+      border-radius: 50%;
+
+      background: white;
+      color: #171717;
+
+      font-size: 27px;
+
+      box-shadow:
+        0 5px 22px rgba(0,0,0,.08);
+
+      cursor: pointer;
+
+      transition:
+        transform .12s ease,
+        box-shadow .18s ease;
+    }
+
+    button:active {
+      transform: scale(.94);
+    }
+
+    #micBtn.gravando {
+      box-shadow:
+        0 0 0 8px rgba(0,0,0,.05),
+        0 0 0 17px rgba(0,0,0,.025);
+    }
+
+    .status {
+      min-height: 24px;
+      margin-top: 28px;
+
+      color: #77736c;
+
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .reouvir {
+      display: none;
+
+      margin-top: 8px;
+
+      color: #77736c;
+
+      font-size: 13px;
+
+      text-decoration: underline;
+
+      cursor: pointer;
+    }
+
+    .erro {
+      font-size: 14px;
+      line-height: 1.5;
+
+      color: #77736c;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="app"></div>
+
+<script>
+
+const API_URL =
+  'https://script.google.com/macros/s/AKfycbyJbrVzTTKDSUp3nu7U3P6YkiI7qIheu6Hql_wqp_45hSBLjvje96GtDYgjg55CtopzxQ/exec';
+
+
+let dados = null;
+let indice = 0;
+
+let mediaRecorder = null;
+let stream = null;
+let chunks = [];
+let gravacaoURL = null;
+let gravando = false;
+
+
+/* =========================================
+   RECEBE DADOS DO APPS SCRIPT
+========================================= */
+
+window.nihongoCallback =
+  function(resultado) {
+
+    dados = resultado;
+
+    if (
+      !resultado ||
+      resultado.ok === false
+    ) {
+
+      mostrarErro(
+        resultado?.mensagem ||
+        'Não foi possível carregar.'
+      );
+
+      return;
+    }
+
+
+    if (
+      resultado.tipo ===
+      'FIM_DE_SEMANA'
+    ) {
+
+      document.getElementById(
+        'app'
+      ).innerHTML = '';
+
+      return;
+    }
+
+
+    if (
+      !resultado.frases ||
+      resultado.frases.length === 0
+    ) {
+
+      document.getElementById(
+        'app'
+      ).innerHTML = '';
+
+      return;
+    }
+
+
+    indice = 0;
+
+    renderizar();
+  };
+
+
+/* =========================================
+   CARREGAR
+========================================= */
+
+function carregar() {
+
+  const script =
+    document.createElement(
+      'script'
+    );
+
+  script.src =
+    API_URL +
+    '?callback=nihongoCallback&t=' +
+    Date.now();
+
+  script.onerror =
+    function() {
+
+      mostrarErro(
+        'Não foi possível conectar ao Nihongo.'
+      );
+
+    };
+
+  document.body.appendChild(
+    script
+  );
+}
+
+
+/* =========================================
+   TELA
+========================================= */
+
+function renderizar() {
+
+  const frase =
+    dados.frases[indice];
+
+  const total =
+    dados.frases.length;
+
+
+  const contador =
+    dados.tipo === 'REVISAO'
+      ? `${indice + 1} / ${total}`
+      : '';
+
+
+  document.getElementById(
+    'app'
+  ).innerHTML = `
+
+    <div class="conteudo">
+
+      <div class="contador">
+        ${contador}
+      </div>
+
+      <h1 class="romaji">
+        ${escapeHTML(frase.romaji)}
+      </h1>
+
+      <div class="traducao">
+        ${escapeHTML(frase.portugues)}
+      </div>
+
+      <div class="acoes">
+
+        <button
+          type="button"
+          onclick="ouvir()"
+          aria-label="Ouvir"
+        >
+          ▶
+        </button>
+
+        <button
+          type="button"
+          id="micBtn"
+          onclick="alternarMicrofone()"
+          aria-label="Falar"
+        >
+          ●
+        </button>
+
+      </div>
+
+      <div
+        class="status"
+        id="status"
+      ></div>
+
+      <div
+        class="reouvir"
+        id="reouvir"
+        onclick="reouvir()"
+      >
+        Ouvir minha gravação
+      </div>
+
+    </div>
+  `;
+}
+
+
+/* =========================================
+   OUVIR PRONÚNCIA JAPONESA
+========================================= */
+
+function ouvir() {
+
+  const frase =
+    dados.frases[indice];
+
+
+  if (
+    !window.speechSynthesis
+  ) {
+
+    status(
+      'Áudio não disponível.'
+    );
+
+    return;
+  }
+
+
+  speechSynthesis.cancel();
+
+
+  const utterance =
+    new SpeechSynthesisUtterance(
+      frase.japones
+    );
+
+
+  utterance.lang =
+    'ja-JP';
+
+  utterance.rate =
+    0.82;
+
+  utterance.pitch =
+    1;
+
+
+  const vozes =
+    speechSynthesis.getVoices();
+
+
+  const japonesa =
+    vozes.find(voz =>
+      String(voz.lang || '')
+        .toLowerCase()
+        .startsWith('ja')
+    );
+
+
+  if (japonesa) {
+    utterance.voice =
+      japonesa;
+  }
+
+
+  speechSynthesis.speak(
+    utterance
+  );
+}
+
+
+/* =========================================
+   MICROFONE
+========================================= */
+
+async function alternarMicrofone() {
+
+  if (gravando) {
+
+    pararGravacao();
+
+  } else {
+
+    await iniciarGravacao();
+
+  }
+}
+
+
+async function iniciarGravacao() {
+
+  if (
+    !navigator.mediaDevices ||
+    !navigator.mediaDevices.getUserMedia
+  ) {
+
+    status(
+      'Microfone não disponível.'
+    );
+
+    return;
+  }
+
+
+  if (
+    typeof MediaRecorder ===
+    'undefined'
+  ) {
+
+    status(
+      'Gravação de áudio não disponível.'
+    );
+
+    return;
+  }
+
+
+  try {
+
+    status(
+      'Solicitando acesso ao microfone…'
+    );
+
+
+    stream =
+      await navigator.mediaDevices
+        .getUserMedia({
+          audio: true
+        });
+
+
+    chunks = [];
+
+
+    let opcoes = {};
+
+
+    const tipos = [
+      'audio/mp4',
+      'audio/webm;codecs=opus',
+      'audio/webm'
+    ];
+
+
+    for (
+      const tipo of tipos
+    ) {
+
+      if (
+        MediaRecorder.isTypeSupported &&
+        MediaRecorder.isTypeSupported(
+          tipo
+        )
+      ) {
+
+        opcoes.mimeType =
+          tipo;
+
+        break;
+      }
+    }
+
+
+    mediaRecorder =
+      new MediaRecorder(
+        stream,
+        opcoes
+      );
+
+
+    mediaRecorder.ondataavailable =
+      function(event) {
+
+        if (
+          event.data &&
+          event.data.size
+        ) {
+
+          chunks.push(
+            event.data
+          );
+
+        }
+      };
+
+
+    mediaRecorder.onstop =
+      finalizarGravacao;
+
+
+    mediaRecorder.onerror =
+      function(event) {
+
+        console.error(
+          event
+        );
+
+        status(
+          'Houve um problema durante a gravação.'
+        );
+
+        limparMicrofone();
+
+      };
+
+
+    mediaRecorder.start();
+
+
+    gravando =
+      true;
+
+
+    const botao =
+      document.getElementById(
+        'micBtn'
+      );
+
+
+    if (botao) {
+
+      botao.classList.add(
+        'gravando'
+      );
+
+      botao.textContent =
+        '■';
+
+    }
+
+
+    status(
+      'Gravando… toque novamente para parar.'
+    );
+
+
+  } catch (erro) {
+
+    console.error(
+      erro
+    );
+
+
+    if (
+      erro.name ===
+      'NotAllowedError'
+    ) {
+
+      status(
+        'Acesso ao microfone não permitido.'
+      );
+
+    } else if (
+      erro.name ===
+      'NotFoundError'
+    ) {
+
+      status(
+        'Nenhum microfone foi encontrado.'
+      );
+
+    } else {
+
+      status(
+        'Não foi possível iniciar o microfone.'
+      );
+
+    }
+
+
+    limparMicrofone();
+  }
+}
+
+
+function pararGravacao() {
+
+  if (
+    !mediaRecorder ||
+    mediaRecorder.state ===
+      'inactive'
+  ) {
+
+    limparMicrofone();
+
+    return;
+  }
+
+
+  status(
+    'Processando gravação…'
+  );
+
+
+  mediaRecorder.stop();
+
+
+  gravando =
+    false;
+
+
+  const botao =
+    document.getElementById(
+      'micBtn'
+    );
+
+
+  if (botao) {
+
+    botao.classList.remove(
+      'gravando'
+    );
+
+    botao.textContent =
+      '●';
+
+  }
+}
+
+
+function finalizarGravacao() {
+
+  if (!chunks.length) {
+
+    status(
+      'Nenhum áudio foi gravado.'
+    );
+
+    limparMicrofone();
+
+    return;
+  }
+
+
+  const mimeType =
+    mediaRecorder &&
+    mediaRecorder.mimeType
+      ? mediaRecorder.mimeType
+      : 'audio/mp4';
+
+
+  const blob =
+    new Blob(
+      chunks,
+      {
+        type: mimeType
+      }
+    );
+
+
+  if (gravacaoURL) {
+
+    URL.revokeObjectURL(
+      gravacaoURL
+    );
+
+  }
+
+
+  gravacaoURL =
+    URL.createObjectURL(
+      blob
+    );
+
+
+  if (stream) {
+
+    stream
+      .getTracks()
+      .forEach(track =>
+        track.stop()
+      );
+
+  }
+
+
+  stream =
+    null;
+
+  mediaRecorder =
+    null;
+
+  gravando =
+    false;
+
+
+  const reouvir =
+    document.getElementById(
+      'reouvir'
+    );
+
+
+  if (reouvir) {
+
+    reouvir.style.display =
+      'block';
+
+  }
+
+
+  status(
+    '✓ Pronúncia gravada.'
+  );
+}
+
+
+function limparMicrofone() {
+
+  gravando =
+    false;
+
+
+  if (stream) {
+
+    stream
+      .getTracks()
+      .forEach(track =>
+        track.stop()
+      );
+
+  }
+
+
+  stream =
+    null;
+
+  mediaRecorder =
+    null;
+
+
+  const botao =
+    document.getElementById(
+      'micBtn'
+    );
+
+
+  if (botao) {
+
+    botao.classList.remove(
+      'gravando'
+    );
+
+    botao.textContent =
+      '●';
+
+  }
+}
+
+
+/* =========================================
+   OUVIR MINHA GRAVAÇÃO
+========================================= */
+
+function reouvir() {
+
+  if (!gravacaoURL) {
+    return;
+  }
+
+
+  const audio =
+    new Audio(
+      gravacaoURL
+    );
+
+
+  audio.play()
+    .catch(function() {
+
+      status(
+        'Não foi possível reproduzir a gravação.'
+      );
+
+    });
+}
+
+
+/* =========================================
+   REVISÃO
+========================================= */
+
+function proximaFrase() {
+
+  if (
+    dados.tipo !==
+    'REVISAO'
+  ) {
+
+    return;
+  }
+
+
+  if (
+    indice <
+    dados.frases.length - 1
+  ) {
+
+    indice++;
+
+    gravacaoURL =
+      null;
+
+    renderizar();
+
+  } else {
+
+    document.getElementById(
+      'app'
+    ).innerHTML = '';
+
+  }
+}
+
+
+/* =========================================
+   AUXILIARES
+========================================= */
+
+function status(texto) {
+
+  const elemento =
+    document.getElementById(
+      'status'
+    );
+
+
+  if (elemento) {
+
+    elemento.textContent =
+      texto;
+
+  }
+}
+
+
+function mostrarErro(texto) {
+
+  document.getElementById(
+    'app'
+  ).innerHTML = `
+
+    <div class="erro">
+      ${escapeHTML(texto)}
+    </div>
+  `;
+}
+
+
+function escapeHTML(valor) {
+
+  return String(
+    valor ?? ''
+  )
+
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+
+    .replace(
+      /</g,
+      '&lt;'
+    )
+
+    .replace(
+      />/g,
+      '&gt;'
+    )
+
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+
+    .replace(
+      /'/g,
+      '&#039;'
+    );
+}
+
+
+carregar();
+
+</script>
+
+</body>
+
+</html>
