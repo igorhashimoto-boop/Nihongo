@@ -32,7 +32,6 @@
       margin: 0;
       width: 100%;
       min-height: 100%;
-
       background: #f7f6f2;
       color: #171717;
 
@@ -149,10 +148,15 @@
       line-height: 1.45;
     }
 
+    .status.certo {
+      color: #171717;
+      font-weight: 700;
+    }
+
     .reouvir {
       display: none;
 
-      margin-top: 8px;
+      margin-top: 9px;
 
       color: #77736c;
 
@@ -164,10 +168,10 @@
     }
 
     .erro {
+      color: #77736c;
+
       font-size: 14px;
       line-height: 1.5;
-
-      color: #77736c;
     }
   </style>
 </head>
@@ -188,89 +192,84 @@ let indice = 0;
 let mediaRecorder = null;
 let stream = null;
 let chunks = [];
+
 let gravacaoURL = null;
 let gravando = false;
 
-
-/* =========================================
-   RECEBE DADOS DO APPS SCRIPT
-========================================= */
-
-window.nihongoCallback =
-  function(resultado) {
-
-    dados = resultado;
-
-    if (
-      !resultado ||
-      resultado.ok === false
-    ) {
-
-      mostrarErro(
-        resultado?.mensagem ||
-        'Não foi possível carregar.'
-      );
-
-      return;
-    }
+let recognition = null;
+let textoReconhecido = '';
 
 
-    if (
-      resultado.tipo ===
-      'FIM_DE_SEMANA'
-    ) {
+/* =====================================================
+   API
+===================================================== */
 
-      document.getElementById(
-        'app'
-      ).innerHTML = '';
+window.nihongoCallback = function(resultado) {
 
-      return;
-    }
+  dados = resultado;
 
+  if (
+    !resultado ||
+    resultado.ok === false
+  ) {
 
-    if (
-      !resultado.frases ||
-      resultado.frases.length === 0
-    ) {
+    mostrarErro(
+      resultado?.mensagem ||
+      'Não foi possível carregar.'
+    );
 
-      document.getElementById(
-        'app'
-      ).innerHTML = '';
-
-      return;
-    }
+    return;
+  }
 
 
-    indice = 0;
+  if (
+    resultado.tipo === 'FIM_DE_SEMANA'
+  ) {
 
-    renderizar();
-  };
+    document.getElementById(
+      'app'
+    ).innerHTML = '';
+
+    return;
+  }
 
 
-/* =========================================
-   CARREGAR
-========================================= */
+  if (
+    !resultado.frases ||
+    resultado.frases.length === 0
+  ) {
+
+    document.getElementById(
+      'app'
+    ).innerHTML = '';
+
+    return;
+  }
+
+
+  indice = 0;
+
+  renderizar();
+};
+
 
 function carregar() {
 
   const script =
-    document.createElement(
-      'script'
-    );
+    document.createElement('script');
 
   script.src =
     API_URL +
     '?callback=nihongoCallback&t=' +
     Date.now();
 
-  script.onerror =
-    function() {
+  script.onerror = function() {
 
-      mostrarErro(
-        'Não foi possível conectar ao Nihongo.'
-      );
+    mostrarErro(
+      'Não foi possível conectar ao Nihongo.'
+    );
 
-    };
+  };
 
   document.body.appendChild(
     script
@@ -278,9 +277,9 @@ function carregar() {
 }
 
 
-/* =========================================
+/* =====================================================
    TELA
-========================================= */
+===================================================== */
 
 function renderizar() {
 
@@ -289,7 +288,6 @@ function renderizar() {
 
   const total =
     dados.frases.length;
-
 
   const contador =
     dados.tipo === 'REVISAO'
@@ -354,19 +352,16 @@ function renderizar() {
 }
 
 
-/* =========================================
-   OUVIR PRONÚNCIA JAPONESA
-========================================= */
+/* =====================================================
+   OUVIR
+===================================================== */
 
 function ouvir() {
 
   const frase =
     dados.frases[indice];
 
-
-  if (
-    !window.speechSynthesis
-  ) {
+  if (!window.speechSynthesis) {
 
     status(
       'Áudio não disponível.'
@@ -419,9 +414,9 @@ function ouvir() {
 }
 
 
-/* =========================================
+/* =====================================================
    MICROFONE
-========================================= */
+===================================================== */
 
 async function alternarMicrofone() {
 
@@ -439,38 +434,7 @@ async function alternarMicrofone() {
 
 async function iniciarGravacao() {
 
-  if (
-    !navigator.mediaDevices ||
-    !navigator.mediaDevices.getUserMedia
-  ) {
-
-    status(
-      'Microfone não disponível.'
-    );
-
-    return;
-  }
-
-
-  if (
-    typeof MediaRecorder ===
-    'undefined'
-  ) {
-
-    status(
-      'Gravação de áudio não disponível.'
-    );
-
-    return;
-  }
-
-
   try {
-
-    status(
-      'Solicitando acesso ao microfone…'
-    );
-
 
     stream =
       await navigator.mediaDevices
@@ -480,6 +444,7 @@ async function iniciarGravacao() {
 
 
     chunks = [];
+    textoReconhecido = '';
 
 
     let opcoes = {};
@@ -492,15 +457,11 @@ async function iniciarGravacao() {
     ];
 
 
-    for (
-      const tipo of tipos
-    ) {
+    for (const tipo of tipos) {
 
       if (
         MediaRecorder.isTypeSupported &&
-        MediaRecorder.isTypeSupported(
-          tipo
-        )
+        MediaRecorder.isTypeSupported(tipo)
       ) {
 
         opcoes.mimeType =
@@ -538,27 +499,13 @@ async function iniciarGravacao() {
       finalizarGravacao;
 
 
-    mediaRecorder.onerror =
-      function(event) {
-
-        console.error(
-          event
-        );
-
-        status(
-          'Houve um problema durante a gravação.'
-        );
-
-        limparMicrofone();
-
-      };
+    iniciarReconhecimento();
 
 
     mediaRecorder.start();
 
 
-    gravando =
-      true;
+    gravando = true;
 
 
     const botao =
@@ -567,61 +514,130 @@ async function iniciarGravacao() {
       );
 
 
-    if (botao) {
+    botao.classList.add(
+      'gravando'
+    );
 
-      botao.classList.add(
-        'gravando'
-      );
-
-      botao.textContent =
-        '■';
-
-    }
+    botao.textContent =
+      '■';
 
 
     status(
-      'Gravando… toque novamente para parar.'
+      'Estou ouvindo…'
     );
 
 
   } catch (erro) {
 
-    console.error(
-      erro
+    console.error(erro);
+
+    status(
+      'Não foi possível iniciar o microfone.'
     );
-
-
-    if (
-      erro.name ===
-      'NotAllowedError'
-    ) {
-
-      status(
-        'Acesso ao microfone não permitido.'
-      );
-
-    } else if (
-      erro.name ===
-      'NotFoundError'
-    ) {
-
-      status(
-        'Nenhum microfone foi encontrado.'
-      );
-
-    } else {
-
-      status(
-        'Não foi possível iniciar o microfone.'
-      );
-
-    }
-
-
-    limparMicrofone();
   }
 }
 
+
+/* =====================================================
+   RECONHECIMENTO JAPONÊS
+===================================================== */
+
+function iniciarReconhecimento() {
+
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+
+  if (!SpeechRecognition) {
+
+    recognition = null;
+
+    return;
+  }
+
+
+  try {
+
+    recognition =
+      new SpeechRecognition();
+
+
+    recognition.lang =
+      'ja-JP';
+
+    recognition.continuous =
+      false;
+
+    recognition.interimResults =
+      false;
+
+    recognition.maxAlternatives =
+      3;
+
+
+    recognition.onresult =
+      function(event) {
+
+        const resultados =
+          event.results[
+            event.results.length - 1
+          ];
+
+
+        let melhor = '';
+
+
+        for (
+          let i = 0;
+          i < resultados.length;
+          i++
+        ) {
+
+          const texto =
+            resultados[i].transcript;
+
+          if (texto) {
+            melhor = texto;
+            break;
+          }
+        }
+
+
+        textoReconhecido =
+          melhor;
+      };
+
+
+    recognition.onerror =
+      function(event) {
+
+        console.log(
+          'SpeechRecognition:',
+          event.error
+        );
+      };
+
+
+    recognition.start();
+
+
+  } catch (erro) {
+
+    console.log(
+      'SpeechRecognition indisponível:',
+      erro
+    );
+
+    recognition =
+      null;
+  }
+}
+
+
+/* =====================================================
+   PARAR
+===================================================== */
 
 function pararGravacao() {
 
@@ -631,18 +647,24 @@ function pararGravacao() {
       'inactive'
   ) {
 
-    limparMicrofone();
-
     return;
   }
 
 
   status(
-    'Processando gravação…'
+    'Analisando…'
   );
 
 
   mediaRecorder.stop();
+
+
+  if (recognition) {
+
+    try {
+      recognition.stop();
+    } catch (erro) {}
+  }
 
 
   gravando =
@@ -668,25 +690,15 @@ function pararGravacao() {
 }
 
 
+/* =====================================================
+   FINALIZAR
+===================================================== */
+
 function finalizarGravacao() {
 
-  if (!chunks.length) {
-
-    status(
-      'Nenhum áudio foi gravado.'
-    );
-
-    limparMicrofone();
-
-    return;
-  }
-
-
   const mimeType =
-    mediaRecorder &&
-    mediaRecorder.mimeType
-      ? mediaRecorder.mimeType
-      : 'audio/mp4';
+    mediaRecorder?.mimeType ||
+    'audio/mp4';
 
 
   const blob =
@@ -748,58 +760,256 @@ function finalizarGravacao() {
   }
 
 
-  status(
-    '✓ Pronúncia gravada.'
+  /*
+    O SpeechRecognition pode devolver
+    o resultado alguns milissegundos depois
+    do MediaRecorder.
+  */
+
+  setTimeout(
+    avaliarPronuncia,
+    650
   );
 }
 
 
-function limparMicrofone() {
+/* =====================================================
+   AVALIAR
+===================================================== */
 
-  gravando =
-    false;
+function avaliarPronuncia() {
+
+  const frase =
+    dados.frases[indice];
 
 
-  if (stream) {
+  if (!textoReconhecido) {
 
-    stream
-      .getTracks()
-      .forEach(track =>
-        track.stop()
-      );
+    status(
+      'Não consegui entender. Tente novamente.'
+    );
 
+    return;
   }
 
 
-  stream =
-    null;
-
-  mediaRecorder =
-    null;
-
-
-  const botao =
-    document.getElementById(
-      'micBtn'
+  const esperado =
+    normalizarJapones(
+      frase.japones
     );
 
 
-  if (botao) {
-
-    botao.classList.remove(
-      'gravando'
+  const falado =
+    normalizarJapones(
+      textoReconhecido
     );
 
-    botao.textContent =
-      '●';
+
+  const similaridade =
+    calcularSimilaridade(
+      esperado,
+      falado
+    );
+
+
+  console.log({
+    esperado,
+    falado,
+    similaridade
+  });
+
+
+  /*
+    0.72 = tolerância inicial.
+
+    Podemos tornar mais rigoroso
+    depois dos testes reais.
+  */
+
+  if (
+    similaridade >= 0.72
+  ) {
+
+    status(
+      '✓ Perfeito!',
+      true
+    );
+
+
+    if (
+      dados.tipo ===
+      'REVISAO'
+    ) {
+
+      setTimeout(
+        proximaFrase,
+        1100
+      );
+
+    }
+
+  } else {
+
+    status(
+      'Tente novamente'
+    );
 
   }
 }
 
 
-/* =========================================
-   OUVIR MINHA GRAVAÇÃO
-========================================= */
+/* =====================================================
+   COMPARAÇÃO
+===================================================== */
+
+function normalizarJapones(texto) {
+
+  return String(
+    texto || ''
+  )
+
+    .normalize(
+      'NFKC'
+    )
+
+    .replace(
+      /[\s。、！？!?.,・「」『』（）()]/g,
+      ''
+    )
+
+    .toLowerCase();
+}
+
+
+function calcularSimilaridade(
+  a,
+  b
+) {
+
+  if (a === b) {
+    return 1;
+  }
+
+
+  if (!a || !b) {
+    return 0;
+  }
+
+
+  const distancia =
+    levenshtein(
+      a,
+      b
+    );
+
+
+  const tamanho =
+    Math.max(
+      a.length,
+      b.length
+    );
+
+
+  return (
+    1 -
+    distancia / tamanho
+  );
+}
+
+
+function levenshtein(
+  a,
+  b
+) {
+
+  const matriz =
+    Array.from(
+      {
+        length:
+          b.length + 1
+      },
+      () =>
+        new Array(
+          a.length + 1
+        ).fill(0)
+    );
+
+
+  for (
+    let i = 0;
+    i <= b.length;
+    i++
+  ) {
+
+    matriz[i][0] =
+      i;
+
+  }
+
+
+  for (
+    let j = 0;
+    j <= a.length;
+    j++
+  ) {
+
+    matriz[0][j] =
+      j;
+
+  }
+
+
+  for (
+    let i = 1;
+    i <= b.length;
+    i++
+  ) {
+
+    for (
+      let j = 1;
+      j <= a.length;
+      j++
+    ) {
+
+      if (
+        b[i - 1] ===
+        a[j - 1]
+      ) {
+
+        matriz[i][j] =
+          matriz[i - 1][j - 1];
+
+      } else {
+
+        matriz[i][j] =
+          Math.min(
+
+            matriz[i - 1][j - 1] + 1,
+
+            matriz[i][j - 1] + 1,
+
+            matriz[i - 1][j] + 1
+
+          );
+
+      }
+
+    }
+
+  }
+
+
+  return matriz[
+    b.length
+  ][
+    a.length
+  ];
+}
+
+
+/* =====================================================
+   REOUVIR
+===================================================== */
 
 function reouvir() {
 
@@ -808,37 +1018,17 @@ function reouvir() {
   }
 
 
-  const audio =
-    new Audio(
-      gravacaoURL
-    );
-
-
-  audio.play()
-    .catch(function() {
-
-      status(
-        'Não foi possível reproduzir a gravação.'
-      );
-
-    });
+  new Audio(
+    gravacaoURL
+  ).play();
 }
 
 
-/* =========================================
-   REVISÃO
-========================================= */
+/* =====================================================
+   SEXTA
+===================================================== */
 
 function proximaFrase() {
-
-  if (
-    dados.tipo !==
-    'REVISAO'
-  ) {
-
-    return;
-  }
-
 
   if (
     indice <
@@ -850,23 +1040,42 @@ function proximaFrase() {
     gravacaoURL =
       null;
 
+    textoReconhecido =
+      '';
+
     renderizar();
 
   } else {
 
     document.getElementById(
       'app'
-    ).innerHTML = '';
+    ).innerHTML = `
+
+      <div class="conteudo">
+
+        <h1 class="romaji">
+          ✓
+        </h1>
+
+        <div class="traducao">
+          Revisão concluída.
+        </div>
+
+      </div>
+    `;
 
   }
 }
 
 
-/* =========================================
-   AUXILIARES
-========================================= */
+/* =====================================================
+   STATUS
+===================================================== */
 
-function status(texto) {
+function status(
+  texto,
+  certo = false
+) {
 
   const elemento =
     document.getElementById(
@@ -874,14 +1083,25 @@ function status(texto) {
     );
 
 
-  if (elemento) {
-
-    elemento.textContent =
-      texto;
-
+  if (!elemento) {
+    return;
   }
+
+
+  elemento.textContent =
+    texto;
+
+
+  elemento.classList.toggle(
+    'certo',
+    certo
+  );
 }
 
+
+/* =====================================================
+   ERRO
+===================================================== */
 
 function mostrarErro(texto) {
 
@@ -902,30 +1122,11 @@ function escapeHTML(valor) {
     valor ?? ''
   )
 
-    .replace(
-      /&/g,
-      '&amp;'
-    )
-
-    .replace(
-      /</g,
-      '&lt;'
-    )
-
-    .replace(
-      />/g,
-      '&gt;'
-    )
-
-    .replace(
-      /"/g,
-      '&quot;'
-    )
-
-    .replace(
-      /'/g,
-      '&#039;'
-    );
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 
@@ -934,5 +1135,4 @@ carregar();
 </script>
 
 </body>
-
 </html>
